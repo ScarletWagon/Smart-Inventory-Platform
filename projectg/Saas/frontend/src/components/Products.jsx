@@ -3,6 +3,7 @@ import { Box, Typography, Button, Table, TableBody, TableCell, TableContainer, T
 import { Add, Edit, Delete, TrendingUp } from '@mui/icons-material';
 import { fetchProducts, createProduct, updateProduct, deleteProduct, fetchForecast } from '../api/backend';
 import { Line } from 'react-chartjs-2';
+import ConnectionTest from './ConnectionTest';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -12,7 +13,17 @@ export default function Products() {
   const [forecast, setForecast] = useState(null);
   const [forecastProduct, setForecastProduct] = useState(null);
 
-  const load = () => fetchProducts().then(setProducts);
+  const load = async () => {
+    try {
+      console.log('Loading products...');
+      const products = await fetchProducts();
+      console.log('Products loaded:', products);
+      setProducts(products);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      alert('Error loading products: ' + error.message);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const handleOpen = (product) => {
@@ -21,11 +32,47 @@ export default function Products() {
     setOpen(true);
   };
   const handleClose = () => { setOpen(false); setEdit(null); };
-  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleChange = e => {
+    const { name, value } = e.target;
+    console.log('Form field changed:', name, '=', value);
+    setForm(f => ({ ...f, [name]: value }));
+  };
   const handleSave = async () => {
-    if (edit) await updateProduct(edit.id, form);
-    else await createProduct(form);
-    handleClose(); load();
+    try {
+      console.log('Saving product:', form);
+      console.log('Edit mode:', !!edit);
+      
+      // Validate form data
+      if (!form.name || !form.sku) {
+        alert('Please fill in all required fields (Name and SKU)');
+        return;
+      }
+      
+      // Ensure numeric values are properly converted
+      const productData = {
+        ...form,
+        quantityOnHand: parseInt(form.quantityOnHand) || 0,
+        lowStockThreshold: parseInt(form.lowStockThreshold) || 10
+      };
+      
+      console.log('Processed product data:', productData);
+      
+      if (edit) {
+        console.log('Updating product with ID:', edit.id);
+        await updateProduct(edit.id, productData);
+      } else {
+        console.log('Creating new product');
+        const result = await createProduct(productData);
+        console.log('Product created:', result);
+      }
+      
+      handleClose(); 
+      console.log('Reloading products list...');
+      await load();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Error saving product: ' + error.message);
+    }
   };
   const handleDelete = async id => { await deleteProduct(id); load(); };
   const handleForecast = async product => {
@@ -52,6 +99,9 @@ export default function Products() {
       >
         Products
       </Typography>
+      
+      <ConnectionTest />
+      
       <Button 
         variant="contained" 
         startIcon={<Add />} 

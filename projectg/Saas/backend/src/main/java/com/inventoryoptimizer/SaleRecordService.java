@@ -5,6 +5,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class SaleRecordService {
@@ -33,5 +36,26 @@ public class SaleRecordService {
         return saleRecordRepository.findAll().stream()
                 .filter(s -> s.getProduct().getId().equals(productId))
                 .toList();
+    }
+
+    public List<Map<String, Object>> getDailyTrend(int days) {
+        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+        List<SaleRecord> recentSales = saleRecordRepository.findAll().stream()
+                .filter(sale -> sale.getTimestamp().isAfter(startDate))
+                .collect(Collectors.toList());
+
+        return recentSales.stream()
+                .collect(Collectors.groupingBy(
+                    sale -> sale.getTimestamp().toLocalDate(),
+                    Collectors.summingInt(SaleRecord::getQuantitySold)
+                ))
+                .entrySet().stream()
+                .map(entry -> {
+                    Map<String, Object> dayData = new HashMap<>();
+                    dayData.put("date", entry.getKey().toString());
+                    dayData.put("totalSales", entry.getValue());
+                    return dayData;
+                })
+                .collect(Collectors.toList());
     }
 }
