@@ -82,6 +82,7 @@ If you don't want to install PostgreSQL, you can use the H2 file-based database:
 1. **Backend**: Use VS Code task "Run Spring Boot Backend" or:
    ```powershell
    cd backend
+   .\mvnw.cmd spring-boot:run
    ### 🚀 **Latest Updates - July 26, 2025**
 
 #### 🆕 **New Features Added**

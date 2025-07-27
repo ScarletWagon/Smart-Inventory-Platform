@@ -154,6 +154,7 @@ export default function Dashboard({ mode, setMode }) {
       setSalesData([]);
       setTotalRevenue(0);
       setPredictedRevenue(0);
+      setStockInvestment(null);
     } finally {
       setLoading(false);
     }
@@ -179,7 +180,13 @@ export default function Dashboard({ mode, setMode }) {
     { label: 'Stock Health', value: `${stockHealth}%`, icon: cardIcons[2] },
     { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, icon: cardIcons[3] },
     { label: 'Predicted Revenue', value: `$${predictedRevenue.toLocaleString()}`, icon: cardIcons[4] },
-    { label: 'Active Products', value: activeProducts.toLocaleString(), icon: cardIcons[5] }
+    { label: 'Active Products', value: activeProducts.toLocaleString(), icon: cardIcons[5] },
+    { 
+      label: 'Stock Investment', 
+      value: stockInvestment ? `$${stockInvestment.totalInvestment.toLocaleString()}` : '$0', 
+      icon: cardIcons[6],
+      subtitle: stockInvestment ? `${stockInvestment.totalUnits.toLocaleString()} units` : ''
+    }
   ];
 
   return (
@@ -242,6 +249,11 @@ export default function Dashboard({ mode, setMode }) {
                   </Box>
                 </Box>
                 <Typography variant="h4" sx={{ fontWeight: 700 }}>{card.value}</Typography>
+                {card.subtitle && (
+                  <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5 }}>
+                    {card.subtitle}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
