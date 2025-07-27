@@ -289,12 +289,19 @@ public class InventoryOptimizerIntegrationTest {
         product.setLowStockThreshold(10);
         Product savedProduct = productService.saveProduct(product);
 
-        double forecast = forecastService.forecastLinearRegression(savedProduct.getId(), 7);
+        Map<String, Object> forecastResult = forecastService.forecastLinearRegression(savedProduct.getId(), 7);
+        assertNotNull(forecastResult);
+        
+        // Extract the forecast value from the result map
+        Object forecastValue = forecastResult.get("forecast");
+        assertNotNull(forecastValue);
+        double forecast = ((Number) forecastValue).doubleValue();
         
         // For a new product with no sales, forecast should be 0
         assertEquals(0.0, forecast, 0.001);
         
         System.out.println("Forecast for " + savedProduct.getName() + " (7 days): " + forecast);
+        System.out.println("Forecast details: " + forecastResult);
         System.out.println("✅ Forecast generation test PASSED");
     }
 
@@ -341,8 +348,16 @@ public class InventoryOptimizerIntegrationTest {
         System.out.println("3. Updated stock: " + updatedProduct.get().getQuantityOnHand());
 
         // 4. Get forecast
-        double forecast = forecastService.forecastLinearRegression(savedProduct.getId(), 7);
+        Map<String, Object> forecastResult = forecastService.forecastLinearRegression(savedProduct.getId(), 7);
+        assertNotNull(forecastResult);
+        
+        // Extract the forecast value from the result map
+        Object forecastValue = forecastResult.get("forecast");
+        assertNotNull(forecastValue);
+        double forecast = ((Number) forecastValue).doubleValue();
+        
         System.out.println("4. Forecast (7 days): " + forecast);
+        System.out.println("4. Forecast details: " + forecastResult);
 
         // 5. Get daily trend
         List<Map<String, Object>> dailyTrend = saleRecordService.getDailyTrend(30);

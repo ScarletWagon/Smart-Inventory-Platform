@@ -1,6 +1,7 @@
 package com.inventoryoptimizer;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 
 @Entity
 public class Product {
@@ -12,6 +13,14 @@ public class Product {
     private String sku;
     private int quantityOnHand;
     private int lowStockThreshold = 10; // default threshold
+    
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price; // selling price for revenue calculations
+    
+    @Column(precision = 10, scale = 2)
+    private BigDecimal costPrice; // cost price for profit calculations
+    
+    private boolean discontinued = false; // whether product is discontinued
 
     // Getters and setters
     public Long getId() { return id; }
@@ -24,4 +33,10 @@ public class Product {
     public void setQuantityOnHand(int quantityOnHand) { this.quantityOnHand = quantityOnHand; }
     public int getLowStockThreshold() { return lowStockThreshold; }
     public void setLowStockThreshold(int lowStockThreshold) { this.lowStockThreshold = lowStockThreshold; }
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+    public BigDecimal getCostPrice() { return costPrice; }
+    public void setCostPrice(BigDecimal costPrice) { this.costPrice = costPrice; }
+    public boolean isDiscontinued() { return discontinued; }
+    public void setDiscontinued(boolean discontinued) { this.discontinued = discontinued; }
 }

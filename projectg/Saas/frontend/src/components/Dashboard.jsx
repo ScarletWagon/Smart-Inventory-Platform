@@ -1,323 +1,401 @@
-
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, Typography, Grid, Box, Alert } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  IconButton,
+  Switch,
+  useTheme,
+  ToggleButton,
+  ToggleButtonGroup
+} from '@mui/material';
+import {
+  Inventory as InventoryIcon,
+  List as ListIcon,
+  Favorite as FavoriteIcon,
+  AttachMoney as MoneyIcon,
+  TrendingUp as TrendingUpIcon,
+  Refresh as RefreshIcon,
+  ShowChart as ShowChartIcon,
+  Assessment as AssessmentIcon,
+  Savings as SavingsIcon
+} from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
-import { fetchProducts, fetchForecast, fetchProducts as fetchAllProducts, fetchSalesHistory } from '../api/backend';
+import { fetchProducts, fetchSalesHistory, fetchPredictedRevenue, fetchTotalRevenue, fetchAllSales, fetchStockInvestment } from '../api/backend';
 import { Chart, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend } from 'chart.js';
 
-// Register Chart.js components
 Chart.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 
+const cardIcons = [
+  <InventoryIcon fontSize="large" />,
+  <InventoryIcon fontSize="large" />,
+  <FavoriteIcon fontSize="large" />,
+  <MoneyIcon fontSize="large" />,
+  <TrendingUpIcon fontSize="large" />,
+  <ListIcon fontSize="large" />,
+  <SavingsIcon fontSize="large" />
+];
 
-export default function Dashboard() {
-  // State for products, low stock, and sales data
+export default function Dashboard({ mode, setMode }) {
+  const theme = useTheme();
   const [products, setProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [salesData, setSalesData] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [predictedRevenue, setPredictedRevenue] = useState(0);
+  const [stockInvestment, setStockInvestment] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [chartType, setChartType] = useState('revenue'); // 'revenue' or 'quantity'
 
-  // Fetch product data and real sales data from backend
-  useEffect(() => {
-    const loadData = async () => {
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const productData = await fetchProducts();
+      setProducts(productData);
+      setLowStock(productData.filter(p => p.quantityOnHand <= p.lowStockThreshold));
+      
+      // Load sales data and create daily trend
       try {
-        const productData = await fetchAllProducts();
-        setProducts(productData);
-        setLowStock(productData.filter(p => p.quantityOnHand <= p.lowStockThreshold));
-        
-        // Try to fetch real sales data from backend
-        try {
-          const salesHistory = await fetchSalesHistory(30);
-          if (salesHistory && salesHistory.length > 0) {
-            // Transform backend data to chart format
-            const chartData = salesHistory.map(item => ({
-              day: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              sales: item.sales
-            }));
-            setSalesData(chartData);
-          } else {
-            // Fallback to mock data if no sales history available
-            const mockSalesData = Array.from({length: 30}, (_, i) => {
-              const date = new Date();
-              date.setDate(date.getDate() - (29 - i));
-              return { 
-                day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), 
-                sales: Math.floor(Math.random() * 15 + 5)
-              };
-            });
-            setSalesData(mockSalesData);
+        const allSales = await fetchAllSales();
+        if (allSales && allSales.length > 0) {
+          // Group sales by date and calculate daily revenue
+          const salesByDate = {};
+          const currentDate = new Date();
+          
+          // Initialize last 30 days with 0 sales
+          for (let i = 29; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(currentDate.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+            salesByDate[dateStr] = {
+              date: dateStr,
+              revenue: 0,
+              count: 0,
+              displayDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            };
           }
-        } catch (salesError) {
-          console.log('Sales history endpoint not available, using mock data:', salesError);
-          // Fallback to mock data if sales history endpoint doesn't exist yet
-          const mockSalesData = Array.from({length: 30}, (_, i) => {
+          
+          // Add actual sales data
+          allSales.forEach(sale => {
+            const saleDate = new Date(sale.timestamp).toISOString().split('T')[0];
+            if (salesByDate[saleDate]) {
+              const revenue = (sale.unitPrice || 0) * (sale.quantitySold || 0);
+              salesByDate[saleDate].revenue += revenue;
+              salesByDate[saleDate].count += (sale.quantitySold || 0);
+            }
+          });
+          
+          // Convert to chart data format
+          const chartData = Object.values(salesByDate)
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .map(item => ({
+              day: item.displayDate,
+              sales: item.revenue,
+              count: item.count,
+              date: item.date
+            }));
+          
+          setSalesData(chartData);
+        } else {
+          // Generate realistic mock data if no sales exist
+          const chartData = Array.from({ length: 30 }, (_, i) => {
             const date = new Date();
             date.setDate(date.getDate() - (29 - i));
-            return { 
-              day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), 
-              sales: Math.floor(Math.random() * 15 + 5)
+            return {
+              day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              sales: Math.floor(Math.random() * 8000 + 2000), // $2000-$10000 per day
+              count: Math.floor(Math.random() * 20 + 5),
+              date: date.toISOString().split('T')[0]
             };
           });
-          setSalesData(mockSalesData);
+          setSalesData(chartData);
         }
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('Error loading sales data:', error);
+        // Generate realistic mock data on error
+        const chartData = Array.from({ length: 30 }, (_, i) => {
+          const date = new Date();
+          date.setDate(date.getDate() - (29 - i));
+          return {
+            day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            sales: Math.floor(Math.random() * 8000 + 2000), // $2000-$10000 per day
+            count: Math.floor(Math.random() * 20 + 5),
+            date: date.toISOString().split('T')[0]
+          };
+        });
+        setSalesData(chartData);
       }
-    };
+      
+      try {
+        const revenueData = await fetchTotalRevenue();
+        setTotalRevenue(revenueData.totalRevenue || 0);
+      } catch {
+        setTotalRevenue(0);
+      }
+      try {
+        const predictedData = await fetchPredictedRevenue(30);
+        setPredictedRevenue(predictedData.predictedRevenue || 0);
+      } catch {
+        setPredictedRevenue(0);
+      }
+      
+      try {
+        const investmentData = await fetchStockInvestment();
+        setStockInvestment(investmentData);
+      } catch (error) {
+        console.error('Error loading stock investment:', error);
+        setStockInvestment(null);
+      }
+    } catch (error) {
+      setProducts([]);
+      setLowStock([]);
+      setSalesData([]);
+      setTotalRevenue(0);
+      setPredictedRevenue(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
 
-  // Calculate total stock
-  const totalStock = products.reduce((sum, p) => sum + p.quantityOnHand, 0);
+  // Calculate total sales from the chart data and percentage change
+  const totalSales = salesData.reduce((sum, d) => sum + d.sales, 0);
+  const recentData = salesData.slice(-7).reduce((sum, d) => sum + (chartType === 'revenue' ? d.sales : d.count), 0); // Last 7 days
+  const previousData = salesData.slice(-14, -7).reduce((sum, d) => sum + (chartType === 'revenue' ? d.sales : d.count), 0); // Previous 7 days
+  const percentageChange = previousData > 0 ? ((recentData - previousData) / previousData) * 100 : 0;
 
-  // Modern, consistent color scheme dashboard layout
+  const totalStock = products.reduce((sum, p) => sum + p.quantityOnHand, 0);
+  const activeProducts = products.filter(p => p.quantityOnHand > 0).length;
+  const stockHealth = products.length > 0 ? Math.round((activeProducts / products.length) * 100) : 0;
+
+  const cardData = [
+    { label: 'Total Products', value: products.length.toLocaleString(), icon: cardIcons[0] },
+    { label: 'Total Stock', value: totalStock.toLocaleString(), icon: cardIcons[1] },
+    { label: 'Stock Health', value: `${stockHealth}%`, icon: cardIcons[2] },
+    { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, icon: cardIcons[3] },
+    { label: 'Predicted Revenue', value: `$${predictedRevenue.toLocaleString()}`, icon: cardIcons[4] },
+    { label: 'Active Products', value: activeProducts.toLocaleString(), icon: cardIcons[5] }
+  ];
+
   return (
-    <Box sx={{ 
-      p: { xs: 2, md: 4 }, 
-      height: '100%', 
-      width: '100%',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-      minHeight: '100vh'
+    <Box sx={{
+      minHeight: '100vh',
+      bgcolor: theme.palette.background.default,
+      color: theme.palette.text.primary,
+      px: { xs: 1, sm: 2, md: 4 },
+      py: { xs: 1, sm: 2, md: 3 }
     }}>
-      {/* Dashboard title with consistent typography */}
-      <Typography 
-        variant="h3" 
-        sx={{ 
-          fontWeight: 700, 
-          mb: 4,
-          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
-          color: '#1e293b',
-          letterSpacing: '-0.025em'
-        }}
-      >
-        Dashboard
-      </Typography>
-      
-      {/* Modern responsive grid with consistent design */}
-      <Grid container spacing={3} sx={{ height: 'calc(100% - 120px)' }}>
-        {/* Summary Cards Row */}
-        <Grid item xs={12} sx={{ mb: 2 }}>
-          <Grid container spacing={3} sx={{ height: { xs: 'auto', md: '200px' } }}>
-            {/* Total Products card */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ 
-                height: '100%',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 4,
-                boxShadow: '0 8px 32px rgba(59, 130, 246, 0.15)',
-                transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                backdropFilter: 'blur(10px)',
-                '&:hover': {
-                  transform: 'translateY(-8px) scale(1.02)',
-                  boxShadow: '0 20px 60px rgba(59, 130, 246, 0.25)',
-                  borderRadius: 5,
-                }
-              }}>
-                <CardContent sx={{ p: 4, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <Typography variant="h6" sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui', opacity: 0.9, mb: 3 }}>
-                    Total Products
-                  </Typography>
-                  <Typography variant="h2" sx={{ 
-                    fontWeight: 800, 
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui',
-                    fontSize: { xs: '2.5rem', md: '3.5rem' },
-                    lineHeight: 1
-                  }}>
-                    {products.length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            
-            {/* Total Stock card */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ 
-                height: '100%',
-                background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 4,
-                boxShadow: '0 8px 32px rgba(16, 185, 129, 0.15)',
-                transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                backdropFilter: 'blur(10px)',
-                '&:hover': {
-                  transform: 'translateY(-8px) scale(1.02)',
-                  boxShadow: '0 20px 60px rgba(16, 185, 129, 0.25)',
-                  borderRadius: 5,
-                }
-              }}>
-                <CardContent sx={{ p: 4, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <Typography variant="h6" sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui', opacity: 0.9, mb: 2 }}>
-                    Total Stock
-                  </Typography>
-                  <Typography variant="h2" sx={{ 
-                    fontWeight: 800, 
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui',
-                    fontSize: { xs: '2.5rem', md: '3.5rem' },
-                    lineHeight: 1
-                  }}>
-                    {totalStock}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            
-            {/* Low Stock Alerts card */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ 
-                height: '100%',
-                background: lowStock.length > 0 ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 4,
-                boxShadow: lowStock.length > 0 ? '0 8px 32px rgba(245, 158, 11, 0.15)' : '0 8px 32px rgba(107, 114, 128, 0.15)',
-                transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                backdropFilter: 'blur(10px)',
-                '&:hover': {
-                  transform: 'translateY(-8px) scale(1.02)',
-                  boxShadow: lowStock.length > 0 ? '0 20px 60px rgba(245, 158, 11, 0.25)' : '0 20px 60px rgba(107, 114, 128, 0.25)',
-                  borderRadius: 5,
-                }
-              }}>
-                <CardContent sx={{ p: 4, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <Typography variant="h6" sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui', opacity: 0.9, mb: 2 }}>
-                    Low Stock Alerts
-                  </Typography>
-                  <Box sx={{ flex: 1, overflow: 'auto' }}>
-                    {lowStock.length === 0 ? 
-                      <Typography sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui', opacity: 0.8, fontSize: '1.1rem' }}>
-                        All Stock Levels Good ✅
-                      </Typography> : 
-                      <>
-                        <Typography variant="h3" sx={{ 
-                          fontWeight: 800, 
-                          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui',
-                          mb: 1
-                        }}>
-                          {lowStock.length}
-                        </Typography>
-                        <Typography sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui', opacity: 0.8 }}>
-                          Items need restocking
-                        </Typography>
-                      </>
-                    }
+      {/* Header: Light/Dark Mode Switch and Refresh Button */}
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        mb: 3,
+        gap: 2
+      }}>
+        <IconButton onClick={loadData} disabled={loading} color="primary" sx={{ mr: 2 }}>
+          <RefreshIcon sx={{ animation: loading ? 'spin 1s linear infinite' : 'none', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} />
+        </IconButton>
+        <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.875rem' }}>Light</Typography>
+        <Switch 
+          checked={mode === 'dark'} 
+          onChange={() => setMode(mode === 'light' ? 'dark' : 'light')}
+          sx={{
+            mx: 1,
+            '& .MuiSwitch-track': {
+              backgroundColor: mode === 'dark' ? theme.palette.primary.main : theme.palette.grey[300],
+            },
+          }}
+        />
+        <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.875rem' }}>Dark</Typography>
+      </Box>
+
+      {/* Dashboard Title */}
+      <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>Dashboard</Typography>
+
+      {/* Cards Grid */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        {cardData.map((card, idx) => (
+          <Grid item xs={12} sm={6} md={4} key={card.label}>
+            <Card sx={{
+              bgcolor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
+              boxShadow: 3,
+              borderRadius: 3,
+              minHeight: 120,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              px: 3,
+              py: 2
+            }}>
+              <CardContent sx={{ p: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{card.label}</Typography>
+                  <Box sx={{ ml: 2, color: theme.palette.primary.main, opacity: 0.7 }}>
+                    {card.icon}
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>{card.value}</Typography>
+              </CardContent>
+            </Card>
           </Grid>
-        </Grid>
-        
-        {/* Sales Trend chart - Full width, fills remaining space */}
-        <Grid item xs={12} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <Card sx={{ 
-            flex: 1,
-            backgroundColor: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 4,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-            transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            backdropFilter: 'blur(10px)',
-            '&:hover': {
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.12)',
-              transform: 'translateY(-2px)',
-              borderRadius: 5,
-            }
-          }}>
-            <CardContent sx={{ p: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="h5" sx={{ 
-                fontWeight: 600, 
-                mb: 3,
-                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui',
-                color: '#1e293b'
-              }}>
-                Sales Trend (Last 30 Days)
-              </Typography>
-              {/* Chart container with fixed height */}
-              <Box sx={{ flex: 1, minHeight: { xs: 300, md: 400 }, position: 'relative' }}>
-                <Line
-                  data={{
-                    labels: salesData.map(d => d.day),
-                    datasets: [{
-                      label: 'Sales',
-                      data: salesData.map(d => d.sales),
-                      borderColor: '#3b82f6',
-                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                      tension: 0.4,
-                      fill: true,
-                      borderWidth: 3,
-                      pointBackgroundColor: '#3b82f6',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 4,
-                      pointHoverRadius: 6,
-                    }],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { display: false },
-                      tooltip: {
-                        backgroundColor: '#1e293b',
-                        titleColor: '#ffffff',
-                        bodyColor: '#ffffff',
-                        borderColor: '#3b82f6',
-                        borderWidth: 1,
-                        cornerRadius: 8,
-                        displayColors: false,
-                        titleFont: {
-                          family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
-                          size: 14,
-                          weight: '600'
-                        },
-                        bodyFont: {
-                          family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
-                          size: 13
-                        }
-                      }
-                    },
-                    scales: { 
-                      y: { 
-                        beginAtZero: true,
-                        grid: {
-                          color: '#f1f5f9',
-                          drawBorder: false,
-                        },
-                        ticks: {
-                          color: '#64748b',
-                          font: {
-                            family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
-                            size: 12
-                          }
-                        }
-                      },
-                      x: {
-                        grid: {
-                          color: '#f1f5f9',
-                          drawBorder: false,
-                        },
-                        ticks: {
-                          color: '#64748b',
-                          font: {
-                            family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
-                            size: 12
-                          }
-                        }
-                      }
-                    },
-                    animation: {
-                      duration: 1500,
-                      easing: 'easeInOutCubic'
-                    }
-                  }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+        ))}
       </Grid>
+
+      {/* Sales Trend Chart */}
+      <Card sx={{
+        bgcolor: theme.palette.background.paper,
+        color: theme.palette.text.primary,
+        boxShadow: 3,
+        borderRadius: 3,
+        p: 3,
+        minHeight: 320,
+        width: '100%',
+        mb: 2
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {chartType === 'revenue' ? 'Sales Trend' : 'Quantity Sold Trend'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>Last 30 Days</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <ToggleButtonGroup
+              value={chartType}
+              exclusive
+              onChange={(event, newType) => {
+                if (newType !== null) {
+                  setChartType(newType);
+                }
+              }}
+              size="small"
+              sx={{
+                '& .MuiToggleButton-root': {
+                  border: `1px solid ${theme.palette.divider}`,
+                  color: theme.palette.text.secondary,
+                  '&.Mui-selected': {
+                    bgcolor: theme.palette.primary.main,
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: theme.palette.primary.dark,
+                    },
+                  },
+                },
+              }}
+            >
+              <ToggleButton value="revenue" aria-label="Revenue trend">
+                <MoneyIcon fontSize="small" sx={{ mr: 0.5 }} />
+                Revenue
+              </ToggleButton>
+              <ToggleButton value="quantity" aria-label="Quantity trend">
+                <AssessmentIcon fontSize="small" sx={{ mr: 0.5 }} />
+                Quantity
+              </ToggleButton>
+            </ToggleButtonGroup>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                {chartType === 'revenue' 
+                  ? `$${totalSales.toLocaleString()}`
+                  : `${salesData.reduce((sum, d) => sum + d.count, 0).toLocaleString()} units`
+                }
+              </Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: percentageChange >= 0 ? 'success.main' : 'error.main', 
+                  fontWeight: 600 
+                }}
+              >
+                {percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(1)}%
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+        <Box sx={{ height: 200 }}>
+          <Line
+            data={{
+              labels: salesData.map(d => d.day),
+              datasets: [{
+                label: chartType === 'revenue' ? 'Revenue' : 'Quantity Sold',
+                data: salesData.map(d => chartType === 'revenue' ? d.sales : d.count),
+                borderColor: theme.palette.primary.main,
+                backgroundColor: mode === 'dark'
+                  ? `${theme.palette.primary.main}25`
+                  : `${theme.palette.primary.main}30`,
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: theme.palette.primary.main,
+                pointHoverBorderColor: theme.palette.background.paper,
+                pointHoverBorderWidth: 2
+              }]
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: {
+                intersect: false,
+                mode: 'index'
+              },
+              plugins: { 
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.95)',
+                  titleColor: theme.palette.text.primary,
+                  bodyColor: theme.palette.text.primary,
+                  borderColor: theme.palette.divider,
+                  borderWidth: 1,
+                  cornerRadius: 8,
+                  displayColors: false,
+                  callbacks: {
+                    label: function(context) {
+                      return chartType === 'revenue' 
+                        ? `Revenue: $${context.parsed.y.toLocaleString()}`
+                        : `Quantity: ${context.parsed.y.toLocaleString()} units`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { display: false },
+                  border: { display: false },
+                  ticks: { 
+                    color: theme.palette.text.secondary, 
+                    font: { size: 11 },
+                    maxTicksLimit: 8
+                  }
+                },
+                y: {
+                  grid: { 
+                    color: mode === 'dark' ? '#334155' : '#e2e8f0',
+                    drawBorder: false
+                  },
+                  border: { display: false },
+                  ticks: { 
+                    color: theme.palette.text.secondary, 
+                    font: { size: 11 },
+                    callback: function(value) {
+                      return chartType === 'revenue' 
+                        ? '$' + (value / 1000).toFixed(0) + 'k'
+                        : value.toLocaleString();
+                    }
+                  }
+                }
+              }
+            }}
+          />
+        </Box>
+      </Card>
     </Box>
   );
 }

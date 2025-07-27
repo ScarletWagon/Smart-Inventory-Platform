@@ -1,14 +1,16 @@
 import React from 'react';
-import { AppBar, Toolbar, Typography, Box, Button } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Button, useTheme } from '@mui/material';
 
 export default function Header({ onNav, current }) {
+  const theme = useTheme();
+  
   return (
     <AppBar 
       position="static" 
       elevation={0}
       sx={{ 
-        backgroundColor: '#ffffff',
-        borderBottom: '1px solid #e2e8f0',
+        backgroundColor: theme.palette.background.paper,
+        borderBottom: `1px solid ${theme.palette.divider}`,
         backdropFilter: 'blur(20px)',
         height: '80px',
         display: 'flex',
@@ -22,7 +24,7 @@ export default function Header({ onNav, current }) {
             flexGrow: 1, 
             fontWeight: 700,
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
-            color: '#1e293b',
+            color: theme.palette.text.primary,
             letterSpacing: '-0.025em'
           }}
         >
@@ -34,15 +36,15 @@ export default function Header({ onNav, current }) {
             onClick={() => onNav('dashboard')} 
             sx={{ 
               fontWeight: current==='dashboard'?700:500,
-              color: current==='dashboard' ? '#3b82f6' : '#64748b',
+              color: current==='dashboard' ? theme.palette.primary.main : theme.palette.text.secondary,
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
               px: 3,
               py: 1,
               borderRadius: 2,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                backgroundColor: '#f1f5f9',
-                color: '#3b82f6'
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.primary.main
               }
             }}
           >
@@ -53,15 +55,15 @@ export default function Header({ onNav, current }) {
             onClick={() => onNav('products')} 
             sx={{ 
               fontWeight: current==='products'?700:500,
-              color: current==='products' ? '#3b82f6' : '#64748b',
+              color: current==='products' ? theme.palette.primary.main : theme.palette.text.secondary,
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
               px: 3,
               py: 1,
               borderRadius: 2,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                backgroundColor: '#f1f5f9',
-                color: '#3b82f6'
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.primary.main
               }
             }}
           >
@@ -72,19 +74,38 @@ export default function Header({ onNav, current }) {
             onClick={() => onNav('sales')} 
             sx={{ 
               fontWeight: current==='sales'?700:500,
-              color: current==='sales' ? '#3b82f6' : '#64748b',
+              color: current==='sales' ? theme.palette.primary.main : theme.palette.text.secondary,
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
               px: 3,
               py: 1,
               borderRadius: 2,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                backgroundColor: '#f1f5f9',
-                color: '#3b82f6'
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.primary.main
               }
             }}
           >
             Sales
+          </Button>
+          <Button 
+            color="inherit" 
+            onClick={() => onNav('logs')} 
+            sx={{ 
+              fontWeight: current==='logs'?700:500,
+              color: current==='logs' ? theme.palette.primary.main : theme.palette.text.secondary,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui',
+              px: 3,
+              py: 1,
+              borderRadius: 2,
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.primary.main
+              }
+            }}
+          >
+            Logs
           </Button>
         </Box>
       </Toolbar>
